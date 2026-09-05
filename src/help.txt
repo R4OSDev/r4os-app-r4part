@@ -1,0 +1,44 @@
+﻿R4PART - partition and volume maintenance
+
+LIST DISK | LIST PARTITION | LIST VOLUME
+SELECT DISK <number> | SELECT PARTITION <number> | SELECT VOLUME <number|letter>
+DETAIL [DISK|PARTITION|VOLUME] | RESCAN
+
+CREATE PARTITION PRIMARY|EFI|BIOS [SIZE=MB] [OFFSET=KB] [TYPE=id] [ID=guid] [NAME="name"]
+DELETE PARTITION
+CLEAN [ALL]
+CONVERT GPT|MBR [ID=guid-or-hex]
+FORMAT FS=NTFS|FAT32 [QUICK|FULL] [LABEL="label"]
+ASSIGN [LETTER=X] | REMOVE [LETTER=X]
+OFFLINE [DISK|PARTITION|VOLUME] | ONLINE [DISK|PARTITION|VOLUME] [LETTER=X]
+SET ID=guid-or-MBR-hex-type
+ATTRIBUTES GPT [SET=0xmask] [CLEAR=0xmask]
+UNIQUEID DISK|PARTITION [ID=guid-or-disk-hex]
+ACTIVE | INACTIVE
+HELP | EXIT
+
+SIZE uses MB (1024 KB), OFFSET uses KB. New starts must align to 1 MB.
+Without SIZE, CREATE uses the remainder of the selected free range.
+Without OFFSET, CREATE chooses the first sufficiently large free range.
+GPT TYPE is a GUID; MBR TYPE is a hexadecimal byte. CREATE defaults to basic
+GPT data or MBR type 07. EFI/BIOS require GPT. CONVERT requires an empty table.
+FAT32 requires at least 65525 clusters. NTFS uses 4096-byte clusters and a
+bounded metadata buffer. FULL is the FORMAT default; QUICK keeps free data.
+
+Mutations show the exact target and require YES DISK n [PARTITION n].
+No forced overwrite of busy, running or reserved volumes is supported.
+Wrong geometry, unknown options and unsupported conversions stop before I/O.
+Ctrl+C cancels input or an active operation; after writing began, the target
+may be partially changed. Read the reported flush/verification status.
+
+ASSIGN mounts an unmounted partition; use REMOVE before changing its letter.
+C: and Recovery R: are reserved. OFFLINE flushes and unmounts the selected
+disk/partition through exclusive storage admission. This shared mount state
+remains after EXIT. ONLINE mounts the selected partition or all supported
+partitions of a disk; ASSIGN chooses a particular letter. It does not power
+down a device or prevent another explicit mount operation.
+RESCAN refreshes the selected disk. Device replacement clears the selection.
+Changed identifiers require boot installation mappings to be revalidated.
+
+R4PART uses the current Terminal/SSH console. EXIT returns to its caller.
+R4PART LIST DISK and R4PART /? also work as one-command invocations.

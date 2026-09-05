@@ -1,0 +1,8 @@
+/.zig-cache/
+/zig-out/
+/zig-pkg/
+/Temp/
+*.exe
+*.obj
+*.o
+*.pdb

@@ -1,0 +1,8 @@
+﻿R4PART - Herkunft
+=================
+Neue externe R4OS-Konsolenanwendung fuer Roadmap 0.76.10. Befehlsverarbeitung,
+Auswahl und Bestaetigungen gehoeren diesem Repository; Storagezugriff,
+GPT/MBR- und FAT32-/NTFS-Fachlogik stammen aus dem kanonischen R4OS-SDK.
+Die package-Identitaet ist in build.zig.zon festgelegt. Workspace-Builds
+verwenden die gemappten SDK-/Contract-Checkouts. Recovery importiert die
+fertige R4PART.R4X mit Manifest, Hash und exaktem Quellarchiv ausdruecklich.

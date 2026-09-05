@@ -1,0 +1,6 @@
+﻿# R4PART repository path mappings
+SDK_ROOT=../../SDK
+CONTRACT_ROOT=../../Contract
+DEVKIT_ROOT=../../../DevKit
+ARTIFACTS_ROOT=../../../Artifacts/Modules/R4Part
+ZIG_ROOT=Toolchains/Zig
