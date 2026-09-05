@@ -1,5 +1,5 @@
 const std = @import("std");
-pub const Verb = enum { empty, help, exit, list, select, detail, rescan, create, delete, clean, convert, format, extend, shrink, assign, remove, online, offline, set_type, attributes, unique_id, active, inactive };
+pub const Verb = enum { empty, help, exit, list, select, detail, rescan, create, delete, clean, convert, format, extend, shrink, check, repair, assign, remove, online, offline, set_type, attributes, unique_id, active, inactive };
 pub const Object = enum { current, disk, partition, volume };
 pub const Command = struct {
     verb: Verb = .empty,
@@ -113,6 +113,10 @@ pub fn parse(line: []const u8) Error!Command {
             result.argument = words[1];
             start = 2;
         },
+        .check, .repair => {
+            if (count != 2 or !same(words[1], "GPT")) return error.Syntax;
+            start = 2;
+        },
         .attributes => {
             if (count < 2 or !same(words[1], "GPT")) return error.Syntax;
             start = 2;
@@ -192,6 +196,7 @@ pub fn confirmed(wanted: []const u8, answer: []const u8) bool {
 }
 
 test "destructive commands reject typos, conflicting options, overflow and ambiguous input" {
+    _ = @import("script.zig");
     const expectError = std.testing.expectError;
     try expectError(error.UnknownOption, parse("CLEAN AL"));
     try expectError(error.DuplicateOption, parse("FORMAT FS=NTFS QUICK FULL"));
@@ -210,6 +215,10 @@ test "destructive commands reject typos, conflicting options, overflow and ambig
     try expectError(error.UnknownOption, parse("SHRINK SIZE=16"));
     try std.testing.expect((try parse("shrink querymax")).query_max);
     try std.testing.expectEqual(@as(u64, 32768), (try parse("SHRINK DESIRED=16")).size_sectors.?);
+    try std.testing.expectEqual(Verb.check, (try parse("check gpt")).verb);
+    try std.testing.expectEqual(Verb.repair, (try parse("REPAIR GPT")).verb);
+    for ([_][]const u8{ "CHECK", "CHECK MBR", "REPAIR GPT FORCE", "CHECK GPT ID=1" }) |line|
+        try expectError(error.Syntax, parse(line));
     const format = try parse("format fs=ntfs label=\"My Data\" quick");
     try std.testing.expectEqualStrings("My Data", format.label);
     const create = try parse("CREATE PARTITION PRIMARY SIZE=32 OFFSET=1024");

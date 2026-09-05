@@ -6,6 +6,7 @@ const table = tools.partition;
 const command = @import("command.zig");
 const Input = @import("input.zig").Input;
 const Command = command.Command;
+const script = @import("script.zig");
 const GuestTarget = r4os.storage_tools_guest.Target;
 const State = struct {
     sys: r4os.r4sys.Context,
@@ -19,6 +20,7 @@ const State = struct {
     last_progress: u64 = 0,
     identifier_counter: u64 = 0,
     exit_requested: bool = false,
+    batch: ?script.Script = null,
 
     fn storage(self: *State) r4os.storage.Context {
         return .{ .sys = &self.sys };
@@ -143,10 +145,53 @@ const State = struct {
         const expected = try command.confirmation(&expected_buf, disk.reference.slot, if (target.kind == abi.storage_target_partition) target.partition_number else null);
         self.print("Type {s} to continue: ", .{expected});
         var answer: [128]u8 = undefined;
-        const line = try self.input.line(&self.sys, &answer) orelse return error.Cancelled;
+        const line = try self.nextLine(&answer) orelse return error.MissingConfirmation;
         if (!command.confirmed(expected, line)) return error.Cancelled;
         // The subsequent claim validates the same complete generation-bound
         // target. A confirmation never authorises a replacement device.
+    }
+    fn nextLine(self: *State, out: []u8) !?[]const u8 {
+        if (self.batch) |*batch| {
+            const line = try batch.next() orelse return null;
+            self.print("[line {d}] {s}\r\n", .{ batch.line_number, line });
+            return line;
+        }
+        return self.input.line(&self.sys, out);
+    }
+    fn runScript(self: *State, path: []const u8) !void {
+        var path_z: [512:0]u8 = .{0} ** 512;
+        @memcpy(path_z[0..path.len], path);
+        const bytes = try self.sys.allocator().alloc(u8, script.max_bytes + 1);
+        defer self.sys.allocator().free(bytes);
+        const got = self.sys.fileRead(&path_z, bytes);
+        if (got < 0) return error.ScriptRead;
+        self.batch = try script.Script.init(bytes[0..@intCast(got)]);
+        defer self.batch = null;
+        errdefer self.print("Script stopped at line {d}.\r\n", .{self.batch.?.line_number});
+        while (!self.exit_requested) {
+            const line = try self.nextLine(&.{}) orelse break;
+            const cmd = try command.parse(line);
+            try self.execute(cmd);
+        }
+    }
+    fn gpt(self: *State, repair: bool) !void {
+        var target = try self.whole();
+        const inspection = try tools.gpt_repair.Report.read(self.sys.allocator(), self.executionDevice(&target));
+        defer inspection.deinit();
+        for (&inspection.copies, 0..) |*copy, i| self.print("GPT {s}: {s}\r\n", .{
+            if (i == 0) "primary" else "backup", if (copy.reason) |err| @errorName(err) else "valid",
+        });
+        if (inspection.mbr_reason) |err| self.print("Protective MBR: {s}\r\n", .{@errorName(err)});
+        self.print("GPT status: {s}\r\n", .{@tagName(inspection.status)});
+        if (inspection.status == .healthy) return;
+        _ = try inspection.repairable();
+        if (!repair) return error.GptRepairRequired;
+        try self.confirm("REPAIR GPT: restore the damaged copy from its intact counterpart", target.target);
+        try self.check(target.acquire(), 0);
+        errdefer self.failedClose(&target);
+        try inspection.repair(self.executionDevice(&target), self.work);
+        try self.finish(&target, false, null);
+        self.sys.write("GPT repair verified; surviving copy and protective MBR preserved.\r\n");
     }
     fn freshGuid(self: *State) [16]u8 {
         self.identifier_counter +%= 1;
@@ -221,6 +266,7 @@ const State = struct {
         }
     }
     fn select(self: *State, cmd: Command) !void {
+        errdefer self.clear();
         switch (cmd.object) {
             .disk => {
                 const number = try smallNumber(cmd.argument, 10);
@@ -539,6 +585,8 @@ const State = struct {
             .clean => try self.clean(cmd),
             .format => try self.format(cmd),
             .extend, .shrink => try self.resize(cmd),
+            .check => try self.gpt(false),
+            .repair => try self.gpt(true),
             .assign => try self.assign(cmd.letter),
             .remove => try self.remove(cmd.letter),
             .offline => try self.offlineTarget(cmd.object),
@@ -573,6 +621,17 @@ pub fn r4_app_main(app: *r4os.App) i32 {
     }
     const args = std.mem.trim(u8, std.mem.span(sys.argsRaw()), " \t");
     if (args.len != 0) {
+        const batch_path = script.path(args) catch |err| {
+            state.report(err);
+            return 1;
+        };
+        if (batch_path) |path| {
+            state.runScript(path) catch |err| {
+                state.report(err);
+                return 1;
+            };
+            return 0;
+        }
         const cmd = command.parse(if (command.same(args, "/?")) "HELP" else args) catch |err| {
             state.report(err);
             return 1;

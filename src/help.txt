@@ -17,6 +17,7 @@ SET ID=guid-or-MBR-hex-type
 ATTRIBUTES GPT [SET=0xmask] [CLEAR=0xmask]
 UNIQUEID DISK|PARTITION [ID=guid-or-disk-hex]
 ACTIVE | INACTIVE
+CHECK GPT | REPAIR GPT
 HELP | EXIT
 
 SIZE and DESIRED use MB (1024 KB), OFFSET uses KB. New starts must align to 1 MB.
@@ -61,3 +62,46 @@ Changed identifiers require boot installation mappings to be revalidated.
 
 R4PART uses the current Terminal/SSH console. EXIT returns to its caller.
 R4PART LIST DISK and R4PART /? also work as one-command invocations.
+
+CHECK GPT reports the primary header/array and backup independently, including
+CRCs, ranges, unique IDs and overlaps. It succeeds only when both agree.
+REPAIR GPT is a no-op on a healthy table. Otherwise it restores just the bad
+copy from one intact, matching counterpart, with explicit whole-disk consent.
+It preserves the good copy, protective MBR and partition payload. Both invalid,
+conflicting copies, hybrid MBR, I/O ambiguity and unsupported layouts refuse.
+Repair supports GPT 1.0/92-byte headers, 128-byte entries, at most 128 entries,
+512-byte sectors and a backup at the actual end of the disk. It cannot repair
+filesystems or adapt a raw USB clone to different media capacity.
+
+R4PART /S "C:\TEMP\PART.TXT"
+Loads the whole UTF-8 (optional BOM) script before executing; maximum 64 KB,
+512 bytes per line. CRLF/LF, empty lines and REM comments are supported.
+Commands have exactly the interactive syntax. Each destructive command must
+be followed by its full YES DISK n [PARTITION n] line. Empty/comment lines
+may intervene. EOF, wrong confirmation, invalid selection or any other error
+stops immediately with exit code 1. Success/EXIT returns 0. There is no NOERR,
+implicit YES, variable expansion or automatic rollback of earlier commands.
+A script's own volume can be affected because its file is already in RAM.
+Ctrl+C and caller shutdown still cancel; a failed SELECT clears old selection.
+
+Example read-only script (replace disk 1 with your actual LIST DISK selection):
+  REM inspect a selected GPT disk
+  SELECT DISK 1
+  DETAIL DISK
+  CHECK GPT
+  LIST PARTITION
+  EXIT
+
+Example creating one partition in free space (review disk number first):
+  SELECT DISK 1
+  CREATE PARTITION PRIMARY SIZE=64 NAME="Tools"
+  YES DISK 1
+  REM CREATE selects the new partition; determine its number in LIST PARTITION
+  LIST PARTITION
+  EXIT
+Then use FORMAT FS=NTFS QUICK LABEL="Tools" on that selected partition;
+its confirmation includes PARTITION n. ASSIGN LETTER=X mounts it.
+For existing NTFS: SELECT PARTITION n, SHRINK QUERYMAX, then either
+SHRINK DESIRED=MB or EXTEND SIZE=MB with their explicit confirmations.
+The installation preset's fixed sizes do not limit free R4PART choices.
+No extended/logical MBR, partition MOVE, RAID or virtual disks are provided.

@@ -33,6 +33,15 @@ DESIRED chooses the current maximum. Out-of-range/busy targets reject before
 writing. The smaller filesystem is durable before its partition gives away
 any tail sectors. File contents and the old drive letter survive success.
 
+`CHECK GPT` inspects both copies and their CRCs, geometry and correspondence.
+`REPAIR GPT` restores only a damaged counterpart from one intact copy; it
+refuses ambiguous tables and preserves the surviving copy and protective MBR.
+
+`R4PART /S "C:\TEMP\PART.TXT"` preloads a bounded UTF-8 script into RAM.
+Each mutation requires its own explicit confirmation line. The first error,
+including failed selection or missing confirmation, stops with exit code 1;
+success returns 0. `HELP` includes the full contract and examples.
+
 Build in the R4OS workspace using `./Build.sh` on Linux or `Build.bat` on
 Windows with PowerShell 7. `Settings.R4S` maps the companion SDK, Contract,
 DevKit and output directory. Both starters invoke one `Build.ps1`. `test`

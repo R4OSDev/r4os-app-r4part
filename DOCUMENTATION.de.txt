@@ -1,4 +1,4 @@
-﻿R4PART 0.1.1 / Roadmap 0.76.10
+﻿R4PART 0.1.4 / Roadmap 0.76.13
 ============================
 
 Besitzer: R4OSDev/r4os-app-r4part, Repositories/Apps/R4Part.
@@ -48,7 +48,7 @@ oder Typaenderungen benoetigen eine erneute Pruefung der Installationszuordnung.
 Pruefungen: Build.sh test / Build.bat test fuer Parser-/Bestätigungsgrenzen;
 gebuendelter Recovery-Gastpruefer fuer echte Console-/SSH-/Storage-Abläufe.
 EXIT gibt die Console an den Aufrufer zurueck, Einzelbefehle liefern ihren
-Fehlercode. Skriptmodus und NTFS-Groessenaenderungen folgen separat.
+Fehlercode. Skriptmodus, GPT-Reparatur und NTFS-Resize sind ebenfalls enthalten.
 
 R4DESK:Query:1 ist fuer Konsoleneingabe, Warten und Einzelzeichenausgabe
 explizit importiert. Diese Plattformgruppe ist auch ohne Desktop vorhanden.
@@ -66,3 +66,16 @@ verlagert. Der gemeinsame SDK-Plan prueft Runlists/Belegung und MFT-Hashes,
 schreibt das kleinere Dateisystem vor der kleineren Tabelle und meldet Fehler
 vor einem erfolgreichen Remount. Ctrl+C funktioniert auch beim Vorablesen.
 Unterstuetzte Grenzen und Wiederanlauf: SDK/DOCUMENTATION.de.txt.
+
+0.76.13: CHECK GPT validiert beide Header/Arrays getrennt und ihre Zuordnung.
+REPAIR GPT schreibt nur die defekte Kopie aus einer eindeutigen intakten
+Gegenkopie, zuerst Array/Flush/Readback, danach Header/Flush/Readback.
+Intakte Kopie und Protective MBR bleiben bytegleich. Zwei ungueltige oder
+widerspruechliche Kopien, hybrider MBR und nicht unterstuetzte Geometrien
+werden abgewiesen. Reine I/O-Fehler sind keine reparierbare Korruption.
+Der komplette gelesene Zustand wird nach dem exklusiven Claim erneut gehasht.
+
+/S liest maximal 64 KB UTF-8/BOM vorab in RAM. Syntax, Grenzwerte, Beispiele,
+Bestaetigungen und Fehlercodes stehen vollstaendig in src/help.txt.
+Bestandene Befehle werden bei einem spaeteren Fehler nicht zurueckgerollt.
+Ein fehlgeschlagenes SELECT verwirft auch interaktiv den alten Auswahlkontext.
