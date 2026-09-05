@@ -1,5 +1,5 @@
 const std = @import("std");
-pub const Verb = enum { empty, help, exit, list, select, detail, rescan, create, delete, clean, convert, format, assign, remove, online, offline, set_type, attributes, unique_id, active, inactive };
+pub const Verb = enum { empty, help, exit, list, select, detail, rescan, create, delete, clean, convert, format, extend, assign, remove, online, offline, set_type, attributes, unique_id, active, inactive };
 pub const Object = enum { current, disk, partition, volume };
 pub const Command = struct {
     verb: Verb = .empty,
@@ -126,7 +126,7 @@ pub fn parse(line: []const u8) Error!Command {
         if (value.len >= 2 and value[0] == '"' and value[value.len - 1] == '"') value = value[1 .. value.len - 1];
         if (std.mem.indexOfScalar(u8, value, '"') != null) return error.Syntax;
         var bit: u4 = undefined;
-        if (same(key, "SIZE") and result.verb == .create and separator != null) {
+        if (same(key, "SIZE") and (result.verb == .create or result.verb == .extend) and separator != null) {
             bit = 0;
             result.size_sectors = std.math.mul(u64, try number(value, 10), 2048) catch return error.InvalidNumber;
             if (result.size_sectors.? == 0) return error.InvalidNumber;
@@ -194,6 +194,10 @@ test "destructive commands reject typos, conflicting options, overflow and ambig
     try expectError(error.InvalidNumber, parse("CREATE PARTITION PRIMARY SIZE=18446744073709551615"));
     try expectError(error.UnknownOption, parse("CONVERT GPT FORCE"));
     try expectError(error.UnknownOption, parse("DELETE PARTITION OVERRIDE"));
+    try expectError(error.InvalidNumber, parse("EXTEND SIZE=0"));
+    try expectError(error.DuplicateOption, parse("EXTEND SIZE=16 SIZE=32"));
+    try expectError(error.UnknownOption, parse("EXTEND OFFSET=1024"));
+    try std.testing.expectEqual(@as(u64, 32768), (try parse("extend size=16")).size_sectors.?);
     const format = try parse("format fs=ntfs label=\"My Data\" quick");
     try std.testing.expectEqualStrings("My Data", format.label);
     const create = try parse("CREATE PARTITION PRIMARY SIZE=32 OFFSET=1024");

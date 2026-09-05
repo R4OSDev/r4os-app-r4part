@@ -52,3 +52,9 @@ Fehlercode. Skriptmodus und NTFS-Groessenaenderungen folgen separat.
 
 R4DESK:Query:1 ist fuer Konsoleneingabe, Warten und Einzelzeichenausgabe
 explizit importiert. Diese Plattformgruppe ist auch ohne Desktop vorhanden.
+
+0.76.11: EXTEND [SIZE=MB] vergroessert ausschliesslich angrenzendes NTFS bei
+unveraendertem Start/IDs. Gemeinsamer SDK-Plan mit Bitmaprelokation, gepruefter
+Persistenzfolge und bestehenden Claims. Offene Dateien weisen den Claim ab.
+Nach Erfolg folgt ein frischer Mount am alten Buchstaben; bei Fehler bleibt
+das Ziel ausgehaengt. Grenzen und Wiederanlauf siehe SDK/DOCUMENTATION.de.txt.

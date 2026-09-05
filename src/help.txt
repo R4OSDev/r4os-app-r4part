@@ -9,6 +9,7 @@ DELETE PARTITION
 CLEAN [ALL]
 CONVERT GPT|MBR [ID=guid-or-hex]
 FORMAT FS=NTFS|FAT32 [QUICK|FULL] [LABEL="label"]
+EXTEND [SIZE=MB]
 ASSIGN [LETTER=X] | REMOVE [LETTER=X]
 OFFLINE [DISK|PARTITION|VOLUME] | ONLINE [DISK|PARTITION|VOLUME] [LETTER=X]
 SET ID=guid-or-MBR-hex-type
@@ -24,6 +25,14 @@ GPT TYPE is a GUID; MBR TYPE is a hexadecimal byte. CREATE defaults to basic
 GPT data or MBR type 07. EFI/BIOS require GPT. CONVERT requires an empty table.
 FAT32 requires at least 65525 clusters. NTFS uses 4096-byte clusters and a
 bounded metadata buffer. FULL is the FORMAT default; QUICK keeps free data.
+
+EXTEND adds SIZE MB (or all complete free MB) immediately after an NTFS
+partition; its first sector and IDs stay fixed. Clean NTFS 3.1 with 512-byte
+sectors, 4-KB clusters, 1-KB records and 4-KB indexes is supported. Metadata
+attribute lists, real bad clusters and oversized root indexes are rejected.
+The new area must also fit the relocated bitmap. Open files cause Busy.
+An interrupted resize can require offline NTFS/table repair; no automatic
+rollback is promised. A successfully resized mount keeps its former letter.
 
 Mutations show the exact target and require YES DISK n [PARTITION n].
 No forced overwrite of busy, running or reserved volumes is supported.

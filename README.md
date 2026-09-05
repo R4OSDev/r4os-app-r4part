@@ -18,6 +18,13 @@ state remains after exit. `ONLINE` mounts the selected partition or supported
 partitions of a disk. Reserved/running volumes and open transfers are checked
 by the common storage layer. An explicit later mount can bring a volume online.
 
+`EXTEND [SIZE=MB]` grows an offline NTFS volume into adjacent free space,
+keeping its start and IDs. It plans bitmap relocation, duplicated metadata
+and both boot sectors before writing, then revalidates under an exclusive
+claim. A successful mounted target regains its previous letter. Dirty or
+unsupported volumes are rejected; interruption after writes begin can require
+manual NTFS/partition-table repair. See the SDK maintenance contract.
+
 Build in the R4OS workspace using `./Build.sh` on Linux or `Build.bat` on
 Windows with PowerShell 7. `Settings.R4S` maps the companion SDK, Contract,
 DevKit and output directory. Both starters invoke one `Build.ps1`. `test`

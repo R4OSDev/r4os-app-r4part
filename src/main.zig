@@ -391,6 +391,43 @@ const State = struct {
             try self.finish(&target, false, target.target.partition_number);
         }
     }
+    fn extend(self: *State, cmd: Command) !void {
+        const part = try self.selectedPart();
+        if (part.filesystem != abi.storage_filesystem_ntfs) return error.UnsupportedNtfs;
+        var target = try self.whole();
+        const layout = try self.loadTable(&target);
+        defer self.sys.allocator().destroy(layout);
+        const entry = try layout.get(part.target.partition_number);
+        if (entry.first != part.target.first_lba or entry.count != part.target.sector_count) return error.SelectionChanged;
+        const new_sectors = try layout.extend(part.target.partition_number, cmd.size_sectors);
+        if (part.target.first_lba > std.math.maxInt(u32) or (new_sectors - 1) / 8 > std.math.maxInt(u32)) return error.UnsupportedNtfs;
+        const plan = try tools.ntfs_extend.Plan.prepare(self.sys.allocator(), target.device(null), layout, part.target.partition_number, part.target.sector_count, self.work);
+        defer plan.deinit();
+        // Whole-device table changes preserve unrelated mounts. The kernel
+        // intentionally does not restore a mount whose old length changed;
+        // restore only this successful resize at its previous letter below.
+        const inv = try self.inventory();
+        var letter: u8 = 0;
+        for (0..inv.volume_slots) |i| {
+            var volume: abi.StorageVolumeInfo = .{};
+            const rc = self.storage().volume(inv.generation, @intCast(i), &volume);
+            if (rc == 0) continue;
+            try self.check(rc, 1);
+            if (std.meta.eql(volume.target, part.target)) letter = @intCast(volume.letter);
+        }
+        self.print("EXTEND NTFS: {d} MB -> {d} MB, first LBA stays {d}.\r\n", .{ part.target.sector_count / 2048, new_sectors / 2048, part.target.first_lba });
+        try self.confirm("EXTEND: grow selected NTFS volume into adjacent free space", part.target);
+        try self.check(target.acquire(), 0);
+        defer self.failedClose(&target);
+        try plan.execute(self.executionDevice(&target), layout, self.work);
+        try self.finish(&target, false, part.target.partition_number);
+        if (letter != 0) {
+            const fresh = try self.selectedPart();
+            if (fresh.target.first_lba != part.target.first_lba or fresh.target.sector_count != new_sectors or
+                !std.mem.eql(u8, &fresh.target.partition_guid, &part.target.partition_guid)) return error.SelectionChanged;
+            try self.assign(letter);
+        }
+    }
     fn assign(self: *State, letter: u8) !void {
         const part = try self.selectedPart();
         var mounted: abi.StorageVolumeRef = .{};
@@ -488,6 +525,7 @@ const State = struct {
             .create, .delete, .convert, .unique_id, .set_type, .attributes, .active, .inactive => try self.editTable(cmd),
             .clean => try self.clean(cmd),
             .format => try self.format(cmd),
+            .extend => try self.extend(cmd),
             .assign => try self.assign(cmd.letter),
             .remove => try self.remove(cmd.letter),
             .offline => try self.offlineTarget(cmd.object),
