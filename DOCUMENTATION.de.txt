@@ -58,3 +58,11 @@ unveraendertem Start/IDs. Gemeinsamer SDK-Plan mit Bitmaprelokation, gepruefter
 Persistenzfolge und bestehenden Claims. Offene Dateien weisen den Claim ab.
 Nach Erfolg folgt ein frischer Mount am alten Buchstaben; bei Fehler bleibt
 das Ziel ausgehaengt. Grenzen und Wiederanlauf siehe SDK/DOCUMENTATION.de.txt.
+
+0.76.12: SHRINK QUERYMAX liest den echten Bitmap-/MFT-Zustand. SHRINK entfernt
+DESIRED=MB oder ohne Angabe das gemeldete Maximum. Fragmentierte Dateien und
+feste Metadaten begrenzen die Groesse; die Bitmap wird bei Bedarf im Volume
+verlagert. Der gemeinsame SDK-Plan prueft Runlists/Belegung und MFT-Hashes,
+schreibt das kleinere Dateisystem vor der kleineren Tabelle und meldet Fehler
+vor einem erfolgreichen Remount. Ctrl+C funktioniert auch beim Vorablesen.
+Unterstuetzte Grenzen und Wiederanlauf: SDK/DOCUMENTATION.de.txt.

@@ -10,6 +10,7 @@ CLEAN [ALL]
 CONVERT GPT|MBR [ID=guid-or-hex]
 FORMAT FS=NTFS|FAT32 [QUICK|FULL] [LABEL="label"]
 EXTEND [SIZE=MB]
+SHRINK QUERYMAX | SHRINK [DESIRED=MB]
 ASSIGN [LETTER=X] | REMOVE [LETTER=X]
 OFFLINE [DISK|PARTITION|VOLUME] | ONLINE [DISK|PARTITION|VOLUME] [LETTER=X]
 SET ID=guid-or-MBR-hex-type
@@ -18,7 +19,7 @@ UNIQUEID DISK|PARTITION [ID=guid-or-disk-hex]
 ACTIVE | INACTIVE
 HELP | EXIT
 
-SIZE uses MB (1024 KB), OFFSET uses KB. New starts must align to 1 MB.
+SIZE and DESIRED use MB (1024 KB), OFFSET uses KB. New starts must align to 1 MB.
 Without SIZE, CREATE uses the remainder of the selected free range.
 Without OFFSET, CREATE chooses the first sufficiently large free range.
 GPT TYPE is a GUID; MBR TYPE is a hexadecimal byte. CREATE defaults to basic
@@ -33,6 +34,15 @@ attribute lists, real bad clusters and oversized root indexes are rejected.
 The new area must also fit the relocated bitmap. Open files cause Busy.
 An interrupted resize can require offline NTFS/table repair; no automatic
 rollback is promised. A successfully resized mount keeps its former letter.
+
+SHRINK QUERYMAX reads the actual cluster bitmap and MFT runlists. File data
+and other metadata remain fixed; only the bitmap may move. The highest fixed
+allocation, real bitmap relocation space and a 16-MB floor set the limit.
+SHRINK removes DESIRED MB, or the reported maximum when omitted. Requests
+above that limit fail before confirmation. A busy target cannot be resized.
+The smaller filesystem is flushed and verified before its partition shrinks.
+Attribute lists and more than 1,048,576 MFT records are unsupported for resize;
+allocated extents must agree with the bitmap. No complete partition move.
 
 Mutations show the exact target and require YES DISK n [PARTITION n].
 No forced overwrite of busy, running or reserved volumes is supported.

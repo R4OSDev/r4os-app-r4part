@@ -391,7 +391,7 @@ const State = struct {
             try self.finish(&target, false, target.target.partition_number);
         }
     }
-    fn extend(self: *State, cmd: Command) !void {
+    fn resize(self: *State, cmd: Command) !void {
         const part = try self.selectedPart();
         if (part.filesystem != abi.storage_filesystem_ntfs) return error.UnsupportedNtfs;
         var target = try self.whole();
@@ -399,9 +399,22 @@ const State = struct {
         defer self.sys.allocator().destroy(layout);
         const entry = try layout.get(part.target.partition_number);
         if (entry.first != part.target.first_lba or entry.count != part.target.sector_count) return error.SelectionChanged;
-        const new_sectors = try layout.extend(part.target.partition_number, cmd.size_sectors);
+        const shrinking = cmd.verb == .shrink;
+        const new_sectors = if (shrinking) blk: {
+            const query = try tools.ntfs_resize.Plan.prepare(self.sys.allocator(), self.executionDevice(&target), layout, part.target.partition_number, part.target.sector_count, self.work);
+            defer query.deinit();
+            self.print("Maximum shrink: {d} MB; minimum volume: {d} MB.\r\nLast fixed allocated cluster: {d}; bitmap relocation space: {s}.\r\n", .{
+                query.shrink.maximum_sectors / 2048, query.shrink.minimum_sectors / 2048,
+                query.shrink.highest_fixed_cluster,  if (query.shrink.bitmap_lcn != null) "available" else "unavailable",
+            });
+            self.sys.write("Existing file data and other metadata stay at their cluster positions.\r\n");
+            if (cmd.query_max) return;
+            const desired = cmd.size_sectors orelse query.shrink.maximum_sectors;
+            if (desired == 0 or desired > query.shrink.maximum_sectors) return error.ShrinkLimit;
+            break :blk try layout.shrink(part.target.partition_number, desired);
+        } else try layout.extend(part.target.partition_number, cmd.size_sectors);
         if (part.target.first_lba > std.math.maxInt(u32) or (new_sectors - 1) / 8 > std.math.maxInt(u32)) return error.UnsupportedNtfs;
-        const plan = try tools.ntfs_extend.Plan.prepare(self.sys.allocator(), target.device(null), layout, part.target.partition_number, part.target.sector_count, self.work);
+        const plan = try tools.ntfs_resize.Plan.prepare(self.sys.allocator(), self.executionDevice(&target), layout, part.target.partition_number, part.target.sector_count, self.work);
         defer plan.deinit();
         // Whole-device table changes preserve unrelated mounts. The kernel
         // intentionally does not restore a mount whose old length changed;
@@ -415,8 +428,8 @@ const State = struct {
             try self.check(rc, 1);
             if (std.meta.eql(volume.target, part.target)) letter = @intCast(volume.letter);
         }
-        self.print("EXTEND NTFS: {d} MB -> {d} MB, first LBA stays {d}.\r\n", .{ part.target.sector_count / 2048, new_sectors / 2048, part.target.first_lba });
-        try self.confirm("EXTEND: grow selected NTFS volume into adjacent free space", part.target);
+        self.print("{s} NTFS: {d} MB -> {d} MB, first LBA stays {d}.\r\n", .{ if (shrinking) "SHRINK" else "EXTEND", part.target.sector_count / 2048, new_sectors / 2048, part.target.first_lba });
+        try self.confirm(if (shrinking) "SHRINK: reduce selected NTFS volume and its partition end" else "EXTEND: grow selected NTFS volume into adjacent free space", part.target);
         try self.check(target.acquire(), 0);
         defer self.failedClose(&target);
         try plan.execute(self.executionDevice(&target), layout, self.work);
@@ -525,7 +538,7 @@ const State = struct {
             .create, .delete, .convert, .unique_id, .set_type, .attributes, .active, .inactive => try self.editTable(cmd),
             .clean => try self.clean(cmd),
             .format => try self.format(cmd),
-            .extend => try self.extend(cmd),
+            .extend, .shrink => try self.resize(cmd),
             .assign => try self.assign(cmd.letter),
             .remove => try self.remove(cmd.letter),
             .offline => try self.offlineTarget(cmd.object),
@@ -570,7 +583,7 @@ pub fn r4_app_main(app: *r4os.App) i32 {
         };
         return 0;
     }
-    sys.write("R4PART - R4OS partition tool\r\nType HELP for commands. SIZE is MB; OFFSET is KB.\r\n");
+    sys.write("R4PART - R4OS partition tool\r\nType HELP for commands. SIZE/DESIRED use MB; OFFSET uses KB.\r\n");
     var buffer: [512]u8 = undefined;
     while (!state.exit_requested and !state.input.closed) {
         state.native_error = 0;

@@ -25,6 +25,14 @@ claim. A successful mounted target regains its previous letter. Dirty or
 unsupported volumes are rejected; interruption after writes begin can require
 manual NTFS/partition-table repair. See the SDK maintenance contract.
 
+`SHRINK QUERYMAX` reads the real allocation bitmap and MFT runlists. It
+reports the supported maximum reduction and minimum volume size. Existing
+file and other metadata clusters remain fixed; the bitmap may move into a
+verified free extent. `SHRINK DESIRED=MB` removes exactly that amount; omitting
+DESIRED chooses the current maximum. Out-of-range/busy targets reject before
+writing. The smaller filesystem is durable before its partition gives away
+any tail sectors. File contents and the old drive letter survive success.
+
 Build in the R4OS workspace using `./Build.sh` on Linux or `Build.bat` on
 Windows with PowerShell 7. `Settings.R4S` maps the companion SDK, Contract,
 DevKit and output directory. Both starters invoke one `Build.ps1`. `test`
