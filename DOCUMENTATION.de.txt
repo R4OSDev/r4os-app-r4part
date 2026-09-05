@@ -1,8 +1,8 @@
-﻿R4PART 0.1.0 / Roadmap 0.76.10
+﻿R4PART 0.1.1 / Roadmap 0.76.10
 ============================
 
 Besitzer: R4OSDev/r4os-app-r4part, Repositories/Apps/R4Part.
-Regulaeres R4PART.R4X mit R4SYS:Query:1, ENTRY_MODE=app, APP_CLASS=console.
+Regulaeres R4PART.R4X mit R4SYS:Query:1 und R4DESK:Query:1, ENTRY_MODE=app, APP_CLASS=console.
 TARGET=/R4OS/SOFTWARE/TERMINAL/R4PART.R4X und IMAGE_SCOPE=slim. Der normale
 Terminal-PATH findet R4PART; Recovery startet dieselbe Binaerdatei direkt.
 
@@ -49,3 +49,6 @@ Pruefungen: Build.sh test / Build.bat test fuer Parser-/Bestätigungsgrenzen;
 gebuendelter Recovery-Gastpruefer fuer echte Console-/SSH-/Storage-Abläufe.
 EXIT gibt die Console an den Aufrufer zurueck, Einzelbefehle liefern ihren
 Fehlercode. Skriptmodus und NTFS-Groessenaenderungen folgen separat.
+
+R4DESK:Query:1 ist fuer Konsoleneingabe, Warten und Einzelzeichenausgabe
+explizit importiert. Diese Plattformgruppe ist auch ohne Desktop vorhanden.
