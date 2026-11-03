@@ -1,24 +1,9 @@
-param([Parameter(ValueFromRemainingArguments=$true)][string[]]$BuildArguments=@())
+# Location-only launcher. The selected SDK owns build and component policy.
 $ErrorActionPreference='Stop'
-Set-StrictMode -Version Latest
-try {
-    $settings=@{}
-    foreach($line in [IO.File]::ReadAllLines((Join-Path $PSScriptRoot 'Settings.R4S'))){
-        if($line.StartsWith('#') -or !$line.Contains('=')){continue}
-        $key,$value=$line.Split('=',2);$settings[$key.Trim()]=$value.Trim()
-    }
-    function Resolve-Setting([string]$Key,[string]$Base=$PSScriptRoot){
-        if(!$settings.ContainsKey($Key) -or !$settings[$Key]){throw "Missing setting: $Key"}
-        if([IO.Path]::IsPathRooted($settings[$Key])){return [IO.Path]::GetFullPath($settings[$Key])}
-        return [IO.Path]::GetFullPath((Join-Path $Base $settings[$Key]))
-    }
-    $sdk=Resolve-Setting 'SDK_ROOT';$contract=Resolve-Setting 'CONTRACT_ROOT'
-    $devkit=Resolve-Setting 'DEVKIT_ROOT';$output=Resolve-Setting 'ARTIFACTS_ROOT'
-    $zig=Join-Path (Resolve-Setting 'ZIG_ROOT' $devkit) $(if($IsWindows){'zig.exe'}else{'zig'})
-    foreach($path in @($zig,(Join-Path $sdk 'build.zig.zon'),(Join-Path $contract 'build.zig.zon'))){
-        if(!(Test-Path -LiteralPath $path -PathType Leaf)){throw "Missing build input: $path"}
-    }
-    Push-Location $PSScriptRoot
-    try{& $zig build --prefix $output "--fork=$sdk" "--fork=$contract" @BuildArguments;exit $LASTEXITCODE}
-    finally{Pop-Location}
-}catch{Write-Error $_ -ErrorAction Continue;exit 1}
+$settings=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Settings.R4S'))
+$match=[regex]::Match($settings,'(?m)^SDK_ROOT=([^\r\n]+)')
+if(!$match.Success){throw 'SDK_ROOT is missing.'}
+$sdk=[IO.Path]::GetFullPath($match.Groups[1].Value.Replace('\','/'),$PSScriptRoot)
+$forward=@{ModuleRoot=$PSScriptRoot;BuildArguments=@($args)}
+& (Join-Path $sdk 'Tools/BuildModule.ps1') @forward
+exit $LASTEXITCODE
