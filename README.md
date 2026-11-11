@@ -83,3 +83,22 @@ This does not claim to validate decompressed or decrypted file contents.
 Reference: Microsoft ATTRIBUTE_RECORD_HEADER
 https://learn.microsoft.com/en-us/windows/win32/devnotes/attribute-record-header
 and the existing local NTFS layout references.
+
+API generation 2 (0.90.66)
+--------------------------
+R4Part uses the normal App2 entry and Query2 storage facade from SDK 0.64.201.
+Complete device, layout, partition and mount generations identify each target.
+The shared BlockTransferShape validates the whole-device or partition range
+against the selected disk before constructing the guest adapter. Its formatter
+geometry uses 512-byte sectors. Existing backend limits are documented in help.
+
+Progress uses a checked monotonic clock identity. Script loading verifies the
+complete FileMetadata2 observation and byte count before executing commands.
+Volume display associates free-space observations with the actual drive letter,
+valid flag and current complete volume record.
+
+The existing test step includes the actual target constructor with wide IDs,
+large geometry, stale selection, range and overflow cases. Native acceptance
+uses a disposable SATA disk, existing NTFS data, confirmed extend/shrink and a
+separate FAT32 partition. Project-wide evidence is in
+Docs/API/ConsumerMigration.txt and Research/API-ABI/Migration/0.90.66/.

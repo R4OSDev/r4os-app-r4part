@@ -1,8 +1,8 @@
-﻿R4PART 0.1.4 / Roadmap 0.76.13
+﻿R4PART 0.1.9 / Roadmap 0.90.66
 ============================
 
 Besitzer: R4OSDev/r4os-app-r4part, Repositories/Apps/R4Part.
-Regulaeres R4PART.R4X mit R4SYS:Query:1 und R4DESK:Query:1, ENTRY_MODE=app, APP_CLASS=console.
+Regulaeres R4PART.R4X mit R4SYS:Query2:2 und R4DESK:Query2:2, ENTRY_MODE=app, APP_CLASS=console.
 TARGET=/R4OS/SOFTWARE/TERMINAL/R4PART.R4X und IMAGE_SCOPE=slim. Der normale
 Terminal-PATH findet R4PART; Recovery startet dieselbe Binaerdatei direkt.
 
@@ -50,8 +50,8 @@ gebuendelter Recovery-Gastpruefer fuer echte Console-/SSH-/Storage-Abläufe.
 EXIT gibt die Console an den Aufrufer zurueck, Einzelbefehle liefern ihren
 Fehlercode. Skriptmodus, GPT-Reparatur und NTFS-Resize sind ebenfalls enthalten.
 
-R4DESK:Query:1 ist fuer Konsoleneingabe, Warten und Einzelzeichenausgabe
-explizit importiert. Diese Plattformgruppe ist auch ohne Desktop vorhanden.
+Die Konsole verwendet die generation2-Fassade des SDK. Das Modul startet
+ueber R4XStart2 mit der im Manifest deklarierten Konsolenklasse.
 
 0.76.11: EXTEND [SIZE=MB] vergroessert ausschliesslich angrenzendes NTFS bei
 unveraendertem Start/IDs. Gemeinsamer SDK-Plan mit Bitmaprelokation, gepruefter
@@ -117,3 +117,23 @@ das war eine Fixturegrenze, keine Aenderung am Dateisystem.
 
 R4PART 0.1.5 und Recovery 0.1.55/Menue 0.1.20 uebernehmen den Formatter.
 Keine neue Gast-, Hardware- oder Release-Gesamtpruefung fuer diese Grenzen.
+
+Plattformgeneration 2 (0.90.66)
+-------------------------------
+App2 und die generation2-Storagefassade binden den echten Startkontext.
+BlockTransferShape prueft die komplette Zielregion mit breiten Geraete- und
+Layoutgenerationen vor dem Gastadapter. Die Auswahl erfasst die Sektorgroesse.
+Formatierung und Resize verwenden die in src/help.txt beschriebenen Backendgrenzen.
+
+Die Fortschrittsanzeige prueft Clockidentitaet und monotone Nanosekunden.
+Skripte werden vor ihrer Ausfuehrung als ganze Datei gegen FileMetadata2 und
+Bytezahl geprueft. LIST VOLUME verbindet den echten Buchstaben, das gueltige
+FREE-Flag und die erneut gelesene Volumeidentitaet.
+
+Die Zielgeometrie besitzt einen gezielten Hostfall im vorhandenen Testschritt.
+Der native Lauf auf einer wegwerfbaren SATA-Platte erhaelt alte NTFS-Daten
+ueber Extend/Shrink und einen Buchstabenwechsel und formatiert eine weitere
+FAT32-Partition. Abbruch vor dem ersten Schreibzugriff erhaelt die Rohplatte
+bytegleich. Die Originalfehlerfaelle des SDK pruefen Schreib-/Flush-/Readback-
+und Abbruchfehler nach begonnenem Schreiben. Details liegen unter
+Research/API-ABI/Migration/0.90.66/ und Docs/API/ConsumerMigration.txt.

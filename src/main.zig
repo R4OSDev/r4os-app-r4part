@@ -17,7 +17,7 @@ const State = struct {
     work: []u8,
     native_error: i32 = 0,
     progress: tools.io.Progress = .{},
-    last_progress: u64 = 0,
+    last_progress: ?r4os.time_contract.checked.ClockSample = null,
     identifier_counter: u64 = 0,
     exit_requested: bool = false,
     batch: ?script.Script = null,
@@ -52,7 +52,7 @@ const State = struct {
             return err;
         };
         if (!std.meta.eql(old.reference, fresh.reference) or old.layout_generation != fresh.layout_generation or
-            !std.mem.eql(u8, &old.disk_guid, &fresh.disk_guid) or old.sector_count != fresh.sector_count)
+            !std.mem.eql(u8, &old.disk_guid, &fresh.disk_guid) or old.sector_count != fresh.sector_count or old.sector_bytes != fresh.sector_bytes)
         {
             self.clear();
             return error.SelectionChanged;
@@ -97,10 +97,24 @@ const State = struct {
         return plan;
     }
     fn whole(self: *State) !GuestTarget {
-        return .{ .storage = self.storage(), .target = r4os.storage.Context.wholeDevice(try self.selectedDisk()) };
+        const disk = try self.selectedDisk();
+        return self.boundedTarget(disk, r4os.storage.Context.wholeDevice(disk));
     }
     fn region(self: *State) !GuestTarget {
-        return .{ .storage = self.storage(), .target = (try self.selectedPart()).target };
+        const part = try self.selectedPart();
+        return self.boundedTarget(try self.selectedDisk(), part.target);
+    }
+    fn boundedTarget(self: *State, disk: abi.StorageDeviceInfo, target: abi.StorageTarget) !GuestTarget {
+        if (!std.meta.eql(disk.reference, target.device) or disk.layout_generation != target.layout_generation) return error.SelectionChanged;
+        if (disk.sector_bytes != tools.io.sector_size) return error.Geometry;
+        _ = r4os.block_transfer.validate(target.first_lba, target.sector_count, disk.sector_bytes, std.math.maxInt(u64), .{
+            .capacity_blocks = disk.sector_count,
+            .max_blocks = disk.sector_count,
+            .max_bytes = std.math.maxInt(u64),
+            .lba_bits = 64,
+            .buffer_mode = @intFromEnum(r4os.block_transfer.BufferMode.at_least),
+        }) catch return error.Geometry;
+        return .{ .storage = self.storage(), .target = target };
     }
     fn finish(self: *State, target: *GuestTarget, keep_unmounted: bool, number: ?u32) !void {
         const rc = target.release(keep_unmounted);
@@ -119,7 +133,7 @@ const State = struct {
     }
     fn executionDevice(self: *State, target: *GuestTarget) tools.io.Device {
         self.progress = .{};
-        self.last_progress = self.sys.ticks();
+        self.last_progress = self.sys.base.clockSampleChecked() catch null;
         var device = target.device(&self.progress);
         device.cancel_context = self;
         device.continue_fn = continueWork;
@@ -128,8 +142,14 @@ const State = struct {
     fn continueWork(raw: ?*anyopaque, phase: tools.io.Phase, written: u64) bool {
         const self: *State = @ptrCast(@alignCast(raw.?));
         if (self.input.cancelled(&self.sys)) return false;
-        const now = self.sys.ticks();
-        if (now -| self.last_progress >= self.sys.ticksFromMilliseconds(1000)) {
+        const now = self.sys.base.clockSampleChecked() catch return true;
+        const previous = self.last_progress orelse now;
+        if (self.last_progress == null) self.last_progress = now;
+        if (!std.meta.eql(previous.identity, now.identity) or now.instant_ns < previous.instant_ns) {
+            self.last_progress = now;
+            return true;
+        }
+        if (now.instant_ns - previous.instant_ns >= abi.nanoseconds_per_second) {
             self.print("Working: {s}, {d} MB written\r\n", .{ @tagName(phase), written / 2048 });
             self.last_progress = now;
         }
@@ -163,8 +183,21 @@ const State = struct {
         @memcpy(path_z[0..path.len], path);
         const bytes = try self.sys.allocator().alloc(u8, script.max_bytes + 1);
         defer self.sys.allocator().free(bytes);
+        const files = r4os.app_storage.Files{ .sys = self.sys };
+        const file_path = r4os.app_storage.PathZ{ .ptr = &path_z, .len = @intCast(path.len) };
+        const before = switch (files.metadata(file_path)) {
+            .found => |value| value,
+            else => return error.ScriptRead,
+        };
+        if (before.flags & abi.file_metadata2_flag_byte_size_valid == 0) return error.ScriptRead;
+        if (before.byte_size > script.max_bytes) return error.ScriptTooLarge;
         const got = self.sys.fileRead(&path_z, bytes);
-        if (got < 0) return error.ScriptRead;
+        if (got < 0 or got != before.byte_size) return error.ScriptRead;
+        const after = switch (files.metadata(file_path)) {
+            .found => |value| value,
+            else => return error.ScriptRead,
+        };
+        if (!std.meta.eql(before, after)) return error.ScriptRead;
         self.batch = try script.Script.init(bytes[0..@intCast(got)]);
         defer self.batch = null;
         errdefer self.print("Script stopped at line {d}.\r\n", .{self.batch.?.line_number});
@@ -259,9 +292,13 @@ const State = struct {
             const rc = self.storage().volume(inv.generation, @intCast(slot), &vol);
             if (rc == 0) continue;
             try self.check(rc, 1);
-            const drive = if (slot < 26) self.sys.driveInfo(@intCast(slot)) else null;
+            const drive = if (vol.letter >= 'A' and vol.letter <= 'Z') self.sys.driveInfo(vol.letter - 'A') else null;
+            var observed: abi.StorageVolumeInfo = .{};
+            const current = self.storage().volume(inv.generation, @intCast(slot), &observed) == 1 and std.meta.eql(vol, observed);
             self.print(" {d}    {c}    {d}    ", .{ slot, @as(u8, if (vol.letter == 0) '-' else @intCast(vol.letter)), vol.target.sector_count / 2048 });
-            if (drive) |d| self.print("{d}    {s}    {s}", .{ d.free_bytes / (1024 * 1024), filesystem(vol.filesystem), span(&d.name) }) else self.print("?    {s}", .{filesystem(vol.filesystem)});
+            if (current and drive != null and drive.?.mounted != 0 and drive.?.letter == vol.letter and drive.?.reserved & abi.drive_info_flag_free_valid != 0) {
+                self.print("{d}    {s}    {s}", .{ drive.?.free_bytes / (1024 * 1024), filesystem(vol.filesystem), span(&drive.?.name) });
+            } else self.print("?    {s}", .{filesystem(vol.filesystem)});
             self.print("{s}\r\n", .{if (vol.flags & abi.storage_volume_required != 0) " [running / protected]" else ""});
         }
     }
@@ -607,7 +644,7 @@ const State = struct {
     }
 };
 
-pub fn r4_app_main(app: *r4os.App) i32 {
+pub fn r4_app_main(app: *r4os.App2) i32 {
     const sys = app.system();
     const allocator = sys.allocator();
     const state = allocator.create(State) catch return 1;
@@ -714,4 +751,38 @@ fn storageError(code: i32) []const u8 {
         abi.storage_error_unsupported => "unsupported layout or operation",
         else => "storage operation rejected",
     };
+}
+
+test "migration storage target keeps wide identities and bounds every partition" {
+    var state = State{ .sys = undefined, .work = &.{} };
+    var disk = abi.StorageDeviceInfo{
+        .reference = .{ .slot = 3, .generation = 0x1_0000_0001 },
+        .layout_generation = 0x2_0000_0001,
+        .sector_count = 0x3_0000_0000,
+        .sector_bytes = 512,
+    };
+    var target = r4os.storage.Context.wholeDevice(disk);
+    const whole = try state.boundedTarget(disk, target);
+    try std.testing.expectEqualDeep(target, whole.target);
+    target.kind = abi.storage_target_partition;
+    target.partition_number = 7;
+    target.first_lba = 0x1_0000_0000;
+    target.sector_count = 0x1_0000_0000;
+    const region = try state.boundedTarget(disk, target);
+    try std.testing.expectEqualDeep(target, region.target);
+    target.device.generation += 1;
+    try std.testing.expectError(error.SelectionChanged, state.boundedTarget(disk, target));
+    target.device = disk.reference;
+    target.layout_generation += 1;
+    try std.testing.expectError(error.SelectionChanged, state.boundedTarget(disk, target));
+    target.layout_generation = disk.layout_generation;
+    target.first_lba = disk.sector_count;
+    try std.testing.expectError(error.Geometry, state.boundedTarget(disk, target));
+    target = r4os.storage.Context.wholeDevice(disk);
+    disk.sector_bytes = 4096;
+    try std.testing.expectError(error.Geometry, state.boundedTarget(disk, target));
+    disk.sector_bytes = 512;
+    disk.sector_count = std.math.maxInt(u64);
+    target = r4os.storage.Context.wholeDevice(disk);
+    try std.testing.expectError(error.Geometry, state.boundedTarget(disk, target));
 }
