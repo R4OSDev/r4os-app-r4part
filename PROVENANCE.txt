@@ -7,5 +7,5 @@ Die package-Identitaet ist in build.zig.zon festgelegt. Workspace-Builds
 verwenden die gemappten SDK-/Contract-Checkouts. Recovery importiert die
 fertige R4PART.R4X mit Manifest, Hash und exaktem Quellarchiv ausdruecklich.
 
-R4DESK:Query:1 ist fuer Konsoleneingabe, Warten und Einzelzeichenausgabe
+R4DESK:Query2:2 ist fuer Konsoleneingabe, Warten und Einzelzeichenausgabe
 explizit importiert. Diese Plattformgruppe ist auch ohne Desktop vorhanden.
